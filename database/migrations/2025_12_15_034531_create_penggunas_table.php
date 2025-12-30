@@ -11,14 +11,16 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('penggunas', function (Blueprint $table) {
-            $table->id();
-            $table->string('nama');
-            $table->string('email')->unique();
-            $table->string('password');
-            $table->string('no_hp');
-            $table->timestamps();
-        });
+    Schema::create('penggunas', function (Blueprint $table) {
+        $table->id();
+        $table->string('nama');
+        $table->string('email')->unique();
+        $table->string('password'); // panjang aman untuk hash
+        $table->string('no_hp')->nullable();
+        $table->boolean('is_admin')->default(false);
+        $table->timestamps(); // 🔥 WAJIB
+    });
+
     }
 
     /**
