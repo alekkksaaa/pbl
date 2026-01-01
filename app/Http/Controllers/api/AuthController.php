@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Pengguna;
+use App\Models\Petugas;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Facades\Hash;
@@ -58,6 +59,50 @@ class AuthController extends Controller
             'user' => $user,
             'token' => $token,
         ]);
+    }
+
+    public function adminLogin(Request $request)
+    {
+        $data = $request->validate([
+            'nama' => 'required|string',
+            'password' => 'required|string',
+        ]);
+
+        $user = Petugas::where('nama', $data['nama'])->first();
+
+        if (! $user || ! Hash::check($data['password'], $user->password)) {
+            throw ValidationException::withMessages([
+                'nama' => ['Nama atau password salah'],
+            ]);
+        }
+
+        $token = $user->createToken('admin-api-token')->plainTextToken;
+
+        return response()->json([
+            'user' => $user,
+            'token' => $token,
+        ]);
+    }
+
+    public function adminRegister(Request $request)
+    {
+        $data = $request->validate([
+            'nama' => 'required|string|max:255|unique:petugas,nama',
+            'password' => 'required|string|min:6',
+        ]);
+
+        $user = Petugas::create([
+            'nama' => $data['nama'],
+            'password' => \Illuminate\Support\Facades\Hash::make($data['password']),
+        ]);
+
+        $token = $user->createToken('admin-api-token')->plainTextToken;
+
+        return response()->json([
+            'message' => 'Admin terdaftar',
+            'user' => $user,
+            'token' => $token,
+        ], 201);
     }
 
     public function logout(Request $request)
