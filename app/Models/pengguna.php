@@ -18,12 +18,15 @@ class Pengguna extends Authenticatable
         'email',
         'password',
         'no_hp',
+        'is_admin',
     ];
 
-    protected function casts(): array
-    {
-        return [
-            'password' => 'hashed',
-        ];
-    }
+    protected $hidden = [
+        'password',
+    ];
+
+    protected $casts = [
+        'password' => 'hashed',
+        'is_admin' => 'boolean',
+    ];
 }

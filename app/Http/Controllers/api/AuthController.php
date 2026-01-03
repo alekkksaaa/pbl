@@ -6,11 +6,12 @@ use App\Http\Controllers\Controller;
 use App\Models\Pengguna;
 use App\Models\Petugas;
 use Illuminate\Http\Request;
-use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
 {
+    // REGISTER USER ONLY
     public function register(Request $request)
     {
         $data = $request->validate([
@@ -18,26 +19,25 @@ class AuthController extends Controller
             'email' => 'required|email|unique:penggunas,email',
             'password' => 'required|string|min:6',
             'no_hp' => 'nullable|string',
-            'is_admin' => 'nullable|boolean',
         ]);
 
         $user = Pengguna::create([
             'nama' => $data['nama'],
             'email' => $data['email'],
-            'password' => $data['password'], // ✅ AUTO HASH DARI MODEL
+            'password' => $data['password'],
             'no_hp' => $data['no_hp'] ?? null,
-            'is_admin' => $data['is_admin'] ?? false,
+            'is_admin' => false,
         ]);
 
-        $token = $user->createToken('api-token')->plainTextToken;
+        $token = $user->createToken('user-token')->plainTextToken;
 
         return response()->json([
-            'message' => 'Registrasi berhasil',
             'user' => $user,
             'token' => $token,
         ], 201);
     }
 
+    // LOGIN USER (EMAIL)
     public function login(Request $request)
     {
         $data = $request->validate([
@@ -53,7 +53,13 @@ class AuthController extends Controller
             ]);
         }
 
-        $token = $user->createToken('api-token')->plainTextToken;
+        if ($user->is_admin) {
+            return response()->json([
+                'message' => 'Admin tidak boleh login di halaman user',
+            ], 403);
+        }
+
+        $token = $user->createToken('user-token')->plainTextToken;
 
         return response()->json([
             'user' => $user,
@@ -61,54 +67,60 @@ class AuthController extends Controller
         ]);
     }
 
+    // LOGIN ADMIN (NAMA + PASSWORD)
     public function adminLogin(Request $request)
-    {
-        $data = $request->validate([
-            'nama' => 'required|string',
-            'password' => 'required|string',
+{
+    $data = $request->validate([
+        'nama' => 'required|string',
+        'password' => 'required|string',
+    ]);
+
+    $admin = Petugas::where('nama', $data['nama'])->first();
+
+    if (! $admin) {
+        throw ValidationException::withMessages([
+            'nama' => ['Nama atau password admin salah'],
         ]);
+    }
 
-        $user = Petugas::where('nama', $data['nama'])->first();
-
-        if (! $user || ! Hash::check($data['password'], $user->password)) {
+    // ✅ JIKA PASSWORD SUDAH BCRYPT
+    if (Hash::needsRehash($admin->password) === false) {
+        if (! Hash::check($data['password'], $admin->password)) {
             throw ValidationException::withMessages([
-                'nama' => ['Nama atau password salah'],
+                'nama' => ['Nama atau password admin salah'],
+            ]);
+        }
+    } 
+    // ⚠️ JIKA PASSWORD MASIH PLAIN TEXT (DATA LAMA)
+    else {
+        if ($data['password'] !== $admin->password) {
+            throw ValidationException::withMessages([
+                'nama' => ['Nama atau password admin salah'],
             ]);
         }
 
-        $token = $user->createToken('admin-api-token')->plainTextToken;
-
-        return response()->json([
-            'user' => $user,
-            'token' => $token,
-        ]);
+        // 🔥 AUTO HASH ULANG
+        $admin->password = Hash::make($data['password']);
+        $admin->save();
     }
 
-    public function adminRegister(Request $request)
-    {
-        $data = $request->validate([
-            'nama' => 'required|string|max:255|unique:petugas,nama',
-            'password' => 'required|string|min:6',
-        ]);
+    $token = $admin->createToken('admin-api-token')->plainTextToken;
 
-        $user = Petugas::create([
-            'nama' => $data['nama'],
-            'password' => \Illuminate\Support\Facades\Hash::make($data['password']),
-        ]);
+    return response()->json([
+        'message' => 'Login admin berhasil',
+        'user' => $admin,
+        'token' => $token,
+    ]);
+}
 
-        $token = $user->createToken('admin-api-token')->plainTextToken;
 
-        return response()->json([
-            'message' => 'Admin terdaftar',
-            'user' => $user,
-            'token' => $token,
-        ], 201);
-    }
-
+    // LOGOUT
     public function logout(Request $request)
     {
-        $request->user()->currentAccessToken()?->delete();
+        $request->user()->currentAccessToken()->delete();
 
-        return response()->json(['message' => 'Logged out']);
+        return response()->json([
+            'message' => 'Logged out',
+        ]);
     }
 }
