@@ -50,10 +50,8 @@
 
 namespace App\Http\Controllers\Api;
 
-
 use App\Http\Controllers\Controller;
 use App\Models\Pesanan;
-use App\Models\Pengguna;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
@@ -61,13 +59,12 @@ use Illuminate\Support\Facades\Log;
 class PesananController extends Controller
 {
     /**
-     * Menampilkan daftar semua pesanan (Untuk Admin)
+     * Menampilkan daftar semua pesanan (Untuk Admin Panel)
      */
     public function index()
     {
         try {
-            // Mengambil pesanan dengan relasi pengguna dan pembayaran
-            // Diurutkan: Pending di atas, lalu berdasarkan waktu terbaru
+            // Mengambil pesanan dengan relasi
             $data = Pesanan::with(['pengguna', 'pembayaran'])
                 ->orderByRaw("CASE WHEN status = 'pending' THEN 1 ELSE 2 END")
                 ->orderBy('created_at', 'DESC')
@@ -83,23 +80,30 @@ class PesananController extends Controller
     }
 
     /**
-     * Menyimpan pesanan baru (Untuk User/Pelanggan)
+     * Menyimpan pesanan baru (Halaman Invoice User)
      */
     public function store(Request $request)
     {
         try {
+            // Menggunakan Auth::user() yang lebih stabil
             $user = Auth::user();
 
-            // Jika user null, kirim response yang jelas, bukan error 500
             if (!$user) {
-                return response()->json(['message' => 'User tidak terdeteksi. Silakan login ulang.'], 401);
+                return response()->json(['message' => 'Sesi habis, silakan login kembali.'], 401);
             }
 
-            // Simpan data
-            $pesanan = new \App\Models\Pesanan();
+            // Validasi sederhana agar data tidak kosong
+            $request->validate([
+                'tanggal_pesan' => 'required',
+                'jumlah_tiket' => 'required|numeric',
+                'total_harga' => 'required|numeric',
+            ]);
+
+            $pesanan = new Pesanan();
             $pesanan->pengguna_id = $user->id;
             $pesanan->tanggal_pesan = $request->tanggal_pesan;
             $pesanan->jumlah_tiket = $request->jumlah_tiket;
+            // Jika kolom alat_mendaki belum ada di DB, baris ini akan menyebabkan error 500
             $pesanan->alat_mendaki = $request->alat_mendaki ?? "-";
             $pesanan->total_harga = $request->total_harga;
             $pesanan->status = 'pending';
@@ -108,18 +112,35 @@ class PesananController extends Controller
             return response()->json(['success' => true, 'data' => $pesanan], 201);
 
         } catch (\Exception $e) {
-            // Catat error ke log agar bisa dibaca di storage/logs/laravel.log
             Log::error("Gagal Simpan Pesanan: " . $e->getMessage());
-            
             return response()->json([
                 'success' => false,
-                'message' => 'Error Database: ' . $e->getMessage()
+                'message' => 'Gagal mengirim pesanan. Pastikan database sudah di-migrate.'
             ], 500);
         }
     }
 
     /**
-     * Mengonfirmasi status pesanan (Untuk Admin)
+     * Menampilkan riwayat pesanan user yang sedang login
+     */
+    public function userOrders()
+    {
+        $user = Auth::user();
+        
+        if (!$user) {
+            return response()->json(['message' => 'Unauthorized'], 401);
+        }
+
+        $orders = Pesanan::where('pengguna_id', $user->id)
+                    ->with('pembayaran')
+                    ->orderBy('created_at', 'desc')
+                    ->get();
+                    
+        return response()->json($orders);
+    }
+
+    /**
+     * Update Status (Untuk Admin Konfirmasi)
      */
     public function updateStatus(Request $request, $id)
     {
@@ -127,16 +148,11 @@ class PesananController extends Controller
             $pesanan = Pesanan::find($id);
             
             if (!$pesanan) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Pesanan tidak ditemukan'
-                ], 404);
+                return response()->json(['success' => false, 'message' => 'Pesanan tidak ditemukan'], 404);
             }
 
-            // Update status pesanan menjadi success
             $pesanan->update(['status' => 'success']);
 
-            // Jika ada relasi pembayaran, update juga status bayarnya
             if ($pesanan->pembayaran) {
                 $pesanan->pembayaran->update(['status_bayar' => 'success']);
             }
@@ -148,10 +164,7 @@ class PesananController extends Controller
             ]);
             
         } catch (\Exception $e) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Gagal update status: ' . $e->getMessage()
-            ], 500);
+            return response()->json(['success' => false, 'message' => $e->getMessage()], 500);
         }
     }
 }

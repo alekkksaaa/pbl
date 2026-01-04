@@ -91,34 +91,93 @@
 
 
 
+// use Illuminate\Support\Facades\Route;
+// use App\Http\Controllers\Api\AuthController;
+// use App\Http\Controllers\Api\PenggunaController;
+// use App\Http\Controllers\Api\PesananController;
+// use Illuminate\Http\JsonResponse;
+
+// // --- PUBLIC ROUTES ---
+// Route::post('/register', [AuthController::class, 'register']);
+// Route::post('/login', [AuthController::class, 'login']);
+// Route::post('/admin/login', [AuthController::class, 'adminLogin']);
+
+// // --- PROTECTED ROUTES ---
+// Route::middleware('auth:sanctum')->group(function () {
+
+//     Route::post('/logout', [AuthController::class, 'logout']);
+
+//     /* Area Pengguna (User) */
+//     Route::middleware('no_admin')->group(function () {
+//         // Route ini harus di sini agar user bisa membuat pesanan
+//         Route::post('/pesanan', [PesananController::class, 'store']); 
+        
+//         Route::get('/pengguna', [PenggunaController::class, 'index']);
+//         Route::get('/pengguna/{id}', [PenggunaController::class, 'show']);
+//         Route::get('/my-orders', [PesananController::class, 'userOrders']);
+//     });
+
+//     /* Area Admin */
+//     Route::prefix('admin')->middleware('is_admin')->group(function () {
+//         Route::get('/dashboard', function (): JsonResponse {
+//             return response()->json([
+//                 'message' => 'Welcome to admin dashboard',
+//                 'admin' => request()->user(),
+//             ]);
+//         });
+
+//         Route::get('/pesanan', [PesananController::class, 'index']);
+//         Route::put('/pesanan/{id}/konfirmasi', [PesananController::class, 'updateStatus']);
+//     });
+// });
+
+//===========================================================================
+
+
+
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\PenggunaController;
 use App\Http\Controllers\Api\PesananController;
 use Illuminate\Http\JsonResponse;
 
-// --- PUBLIC ROUTES ---
+/*
+|--------------------------------------------------------------------------
+| API Routes
+|--------------------------------------------------------------------------
+*/
+
+// --- PUBLIC ROUTES (Dapat diakses tanpa login) ---
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
 Route::post('/admin/login', [AuthController::class, 'adminLogin']);
 
-// --- PROTECTED ROUTES ---
+// --- PROTECTED ROUTES (Wajib menggunakan Token/Login) ---
 Route::middleware('auth:sanctum')->group(function () {
 
     Route::post('/logout', [AuthController::class, 'logout']);
 
-    /* Area Pengguna (User) */
-    Route::middleware('no_admin')->group(function () {
-        // Route ini harus di sini agar user bisa membuat pesanan
+    /**
+     * AREA PENGGUNA (USER)
+     * Route di bawah ini digunakan untuk proses di halaman Invoice user.
+     */
+    Route::group([], function () {
+        // Simpan pesanan baru dari halaman Invoice
         Route::post('/pesanan', [PesananController::class, 'store']); 
         
+        // Data Profile
         Route::get('/pengguna', [PenggunaController::class, 'index']);
         Route::get('/pengguna/{id}', [PenggunaController::class, 'show']);
-        Route::get('/my-orders', [PesananController::class, 'userOrders']);
+        
+        // Melihat riwayat pesanan sendiri
+        Route::get('/my-orders', [PesananController::class, 'userOrders']); 
     });
 
-    /* Area Admin */
-    Route::prefix('admin')->middleware('is_admin')->group(function () {
+    /**
+     * AREA ADMIN
+     * Route ini akan menampilkan data pada Admin Panel Anda.
+     */
+    Route::prefix('admin')->group(function () {
         Route::get('/dashboard', function (): JsonResponse {
             return response()->json([
                 'message' => 'Welcome to admin dashboard',
@@ -126,7 +185,10 @@ Route::middleware('auth:sanctum')->group(function () {
             ]);
         });
 
+        // Menampilkan daftar semua pesanan untuk Admin Panel
         Route::get('/pesanan', [PesananController::class, 'index']);
+        
+        // Konfirmasi pembayaran/pesanan (Update status ke 'success')
         Route::put('/pesanan/{id}/konfirmasi', [PesananController::class, 'updateStatus']);
     });
 });
